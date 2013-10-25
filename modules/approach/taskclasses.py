@@ -4,7 +4,7 @@ from PyDAQmx.DAQmxTypes import *
 import numpy as np
 import qt
 
-#I assume that the device is 'Dev1'.
+#I assume that the device is 'Dev2'.
 
 #This variable is a list of all the current task objects.
 running_tasks = []
@@ -56,7 +56,7 @@ class DcOutTask(BaseTask):
             raise ValueError(len(channels))
         BaseTask.__init__(self)
         for chan in channels:
-            self.CreateAOVoltageChan("Dev1/ao%i" % chan, "", -10.0, 10.0,
+            self.CreateAOVoltageChan("Dev2/ao%i" % chan, "", -10.0, 10.0,
                                      DAQmx_Val_Volts, "")
         
     def set_voltage(self,voltage):
@@ -72,7 +72,7 @@ class DcOutTask(BaseTask):
         
     def get_voltage(self):
         '''Get current output voltge'''
-        if self._voltage:
+        if self._voltage[0]:
             return self._voltage
         else: 
             logging.error('Voltage not yet definied for this DcOutTask.')
@@ -95,13 +95,13 @@ class AcOutTask(BaseTask):
             raise ValueError(len(channels))
         BaseTask.__init__(self)
         for chan in channels:
-            self.CreateAOVoltageChan("Dev1/ao%i" % chan, "", -10.0, 10.0,
+            self.CreateAOVoltageChan("Dev2/ao%i" % chan, "", -10.0, 10.0,
                                      DAQmx_Val_Volts, None)
         self.CfgSampClkTiming("",samplerate,DAQmx_Val_Rising,
                                 DAQmx_Val_ContSamps, samples)
         self.samples = samples
         if sync:
-            self.CfgDigEdgeStartTrig('/Dev1/ai/StartTrigger', 
+            self.CfgDigEdgeStartTrig('/Dev2/ai/StartTrigger', 
                                        DAQmx_Val_Rising)
     def set_signal(self, signal):
         '''
@@ -116,7 +116,7 @@ class AcOutTask(BaseTask):
         self._signal = signal
         
     def get_signal(self):
-        if self._signal:
+        if self._signal.any():
             return self._signal
         else:
             logging.error('no signal definied')
@@ -139,7 +139,7 @@ def AnologInCallbackTask(BaseTask):
         self.data_samples = samples * len(channels)
         self.data = np.zeros(data_samples)
         for chan in channels:
-            self.CreateAIVoltageChan("Dev1/ai%i" % chan, "", DAQmx_Val_RSE, 
+            self.CreateAIVoltageChan("Dev2/ai%i" % chan, "", DAQmx_Val_RSE, 
                                      -10.0, 10.0, DAQmx_Val_Volts, None)
         self.CfgSampClkTiming("", self.samplerate, DAQmx_Val_Rising, 
                               DAQmx_Val_ContSamps, self.samples)

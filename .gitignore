@@ -1,2 +1,4 @@
 desktop.ini
 initscript.py
+*.pyc
+*Shortcut.lnk
