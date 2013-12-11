@@ -50,14 +50,15 @@ class DcOutTask(BaseTask):
     Args:
         Channels: List of input channels (ints). Order matters!
     '''
-    def __init__(self, channels, start_voltage = False):
+    def __init__(self, dev, channels, start_voltage = False):
         if len(channels) < 1:
             logging.error('Channels must be list with at least one channel')
             raise ValueError(len(channels))
         BaseTask.__init__(self)
         for chan in channels:
-            self.CreateAOVoltageChan("Dev2/ao%i" % chan, "", -10.0, 10.0,
+            self.CreateAOVoltageChan("Dev%i/ao%i" % (dev,chan), "", -10.0, 10.0,
                                      DAQmx_Val_Volts, "")
+        self._voltage = [False]
         
     def set_voltage(self,voltage):
         '''
@@ -89,20 +90,22 @@ class AcOutTask(BaseTask):
     Kwargs:
         sync: synchronize with analog input
     '''
-    def __init__(self, channels, samples, samplerate, sync = False):
+    def __init__(self, dev, channels, samples, samplerate, sync = False):
         if len(channels) < 1:
             logging.error('Channels must be list with at least one channel')
             raise ValueError(len(channels))
         BaseTask.__init__(self)
         for chan in channels:
-            self.CreateAOVoltageChan("Dev2/ao%i" % chan, "", -10.0, 10.0,
+            self.CreateAOVoltageChan("Dev%i/ao%i" % (dev,chan), "", -10.0, 10.0,
                                      DAQmx_Val_Volts, None)
         self.CfgSampClkTiming("",samplerate,DAQmx_Val_Rising,
                                 DAQmx_Val_ContSamps, samples)
         self.samples = samples
         if sync:
-            self.CfgDigEdgeStartTrig('/Dev2/ai/StartTrigger', 
+            self.CfgDigEdgeStartTrig('/Dev%i/ai/StartTrigger' % dev, 
                                        DAQmx_Val_Rising)
+        self._signal = [False]
+        
     def set_signal(self, signal):
         '''
         Sets Signal to be outputted.
@@ -132,14 +135,14 @@ def AnologInCallbackTask(BaseTask):
         samples: number of samples
         samplerate: sampling rate
     '''
-    def __init__(self, channels, samples, samplerate):
+    def __init__(self, dev, channels, samples, samplerate):
         BaseTask.__init__(self)
         self.samples = samples
         self.samplerate = samplerate
         self.data_samples = samples * len(channels)
         self.data = np.zeros(data_samples)
         for chan in channels:
-            self.CreateAIVoltageChan("Dev2/ai%i" % chan, "", DAQmx_Val_RSE, 
+            self.CreateAIVoltageChan("Dev%i/ai%i" % (dev,chan), "", DAQmx_Val_RSE, 
                                      -10.0, 10.0, DAQmx_Val_Volts, None)
         self.CfgSampClkTiming("", self.samplerate, DAQmx_Val_Rising, 
                               DAQmx_Val_ContSamps, self.samples)
