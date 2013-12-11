@@ -2,7 +2,7 @@ import numpy as np
 import msvcrt
 import qt
 
-from approachimagingparams import * #used like C constants, always in CAPS
+from approachimagingparamspark import * #used like C constants, always in CAPS
 import taskclasses as tc
 import measurement_general as mg
 
@@ -109,12 +109,12 @@ def measure(feedback=False, xvec=np.zeros(1), yvec=np.zeros(1),
                 [-np.sine(angle) * yvec[i], np.cos(angle) * yvec[i]])
 
     #Set up tasks:
-    zactask = tc.AcOutTask(3, SAMPLES, SAMPLERATE, sync = True)    
-    zacdata = GenSineWave(samples,amplitude,phase)
-    zactask.set_signal(zacdata) 
-    xytask = tc.DcOutTask(DCCHAN[0:2])
-    ztask = tc.DcOutTask([DCCHAN[2]])
-    maintask = mimCalbackTask(MIMCHANS, SAMPLES, SAMPLERATE, zstart, feedback)
+    zactask = tc.AcOutTask(DEV, ACZCHAN, SAMPLES, SAMPLERATE, sync = True)    
+    zacdata = GenSineWave(DEV, samples,amplitude,phase)
+    zactask.set_signal(zacdata)
+    xytask = tc.DcOutTask(DEV, DCCHAN[0:2])
+    ztask = tc.DcOutTask(DEV, [DCCHAN[2]])
+    maintask = mimCalbackTask(DEV, MIMCHANS, SAMPLES, SAMPLERATE, zstart, feedback)
     
     maintask.userin = False
     while maintask.userin != 'q':

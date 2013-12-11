@@ -1,8 +1,9 @@
 import numpy as np
 
 #OUTPUT CHANNEL NUMBERS
+DEV = 1
 DCCHANS = [1,2,0] #list of DC channel numbers [x,y,z]
-ACZCHAN = 3
+ACZCHAN = [3] #list of AC Z channel
 MIMCHANS = [4,5] #Anaog input channels [C,R]
 
 SAMPLES = 200 #Samples per approach curve
