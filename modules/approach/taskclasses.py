@@ -3,6 +3,7 @@ from PyDAQmx.DAQmxConstants import *
 from PyDAQmx.DAQmxTypes import *
 import numpy as np
 import qt
+import logging
 
 #I assume that the device is 'Dev2'.
 
@@ -73,7 +74,7 @@ class DcOutTask(BaseTask):
         
     def get_voltage(self):
         '''Get current output voltge'''
-        if self._voltage[0]:
+        if hasattr(self, '_voltage'):
             return self._voltage
         else: 
             logging.error('Voltage not yet definied for this DcOutTask.')
@@ -119,7 +120,7 @@ class AcOutTask(BaseTask):
         self._signal = signal
         
     def get_signal(self):
-        if self._signal.any():
+        if hasattr(self, _signal):
             return self._signal
         else:
             logging.error('no signal definied')
