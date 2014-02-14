@@ -10,7 +10,7 @@ import logging
 #This variable is a list of all the current task objects.
 running_tasks = []
 
-def kill_all_tasks():
+def kill_all_tasks(arg):
     '''
     Stop and Clear all tasks
     '''
@@ -22,7 +22,7 @@ def kill_all_tasks():
         task._ClearTaskOld()
     del running_tasks[:]
 
-qt.flow.connect('measurement-end',kill_all_tasks)
+#qt.flow.connect('measurement-end',kill_all_tasks)
     
 class BaseTask(Task):
     def __init__(self):
@@ -125,7 +125,7 @@ class AcOutTask(BaseTask):
         else:
             logging.error('no signal definied')
             
-def AnologInCallbackTask(BaseTask):
+class AnalogInCallbackTask(BaseTask):
     '''
     Creates a continuous analog read task which after set of samples overwrites
     its data to self.data. Other things can be done on callback by adding to
@@ -141,7 +141,7 @@ def AnologInCallbackTask(BaseTask):
         self.samples = samples
         self.samplerate = samplerate
         self.data_samples = samples * len(channels)
-        self.data = np.zeros(data_samples)
+        self.data = np.zeros(self.data_samples)
         for chan in channels:
             self.CreateAIVoltageChan("Dev%i/ai%i" % (dev,chan), "", DAQmx_Val_RSE, 
                                      -10.0, 10.0, DAQmx_Val_Volts, None)
