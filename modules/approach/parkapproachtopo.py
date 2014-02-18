@@ -109,7 +109,11 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             contactheight = np.mean(odata[CONTACT_START:CONTACT_STOP])
             eqheight = np.mean(odata[EQ_START:EQ_STOP])
             displace = contactheight - eqheight
-            self.z[0] += LOOP_GAIN * (displace - TARGET_DISPLACE)# Check sign
+            delta = LOOP_GAIN * (displace - TARGET_DISPLACE)# Check sign
+            if abs(delta) <.01:
+                self.z[0] += delta
+            else:
+                self.z[0] += .01 * np.sign(delta)
             self.ztask.set_voltage(self.z)
         else: # if not in feedback mode
             pass
