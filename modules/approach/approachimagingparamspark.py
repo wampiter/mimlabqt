@@ -9,13 +9,13 @@ TOPOCHAN = [0] #Analog input for laser feedback
 
 SAMPLES = 200 #Samples per approach curve
 SAMPLE_RATE = 2.0e4
-AMPLITUDE = .7
+AMPLITUDE = .8
 PHASE = np.pi
 
 Z_STEP = 2.0e-2 # %f User controlled step in non-feedback (approach) mode
 
-Z_MAX = 1.0 #Maximum Z voltage. VERY IMPORTANT TO NOT CRASH TIP
-Z_MIN = -0.5  #Minimum Z voltage. Prevent runaway in other (less bad) direction
+Z_MAX = 2.0 #Maximum Z voltage. VERY IMPORTANT TO NOT CRASH TIP
+Z_MIN = -3.0  #Minimum Z voltage. Prevent runaway in other (less bad) direction
 Z_LIFT = 0.01
 
 FAR_FIRST_SAMP = 60 #Defines window for far MIM point
