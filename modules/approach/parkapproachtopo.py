@@ -4,17 +4,13 @@ import qt
 import logging
 
 import approachimagingparamspark
-#reload (approachimagingparamspark)
-#from approachimagingparamspark import * #used like C constants, always in CAPS
+reload (approachimagingparamspark)
+from approachimagingparamspark import * #used like C constants, always in CAPS
 import taskclasses as tc
 reload(tc)
 import measurement_general as mg
 
 def measure(feedback=False):
-	#Make sure we have up to date constants (this is ugly).
-    reload (approachimagingparamspark)
-    from approachimagingparamspark import *
-
     #set up qt meaurement flow
     qt.flow.connect('measurement-end', tc.kill_all_tasks)
     qt.mstart()
@@ -58,6 +54,7 @@ def measure(feedback=False):
     maintask.StartTask()
     
     while maintask.userin != 'q':
+        maintask.userin = False
         if msvcrt.kbhit():
             maintask.userin = msvcrt.getch()
         try:
@@ -65,10 +62,11 @@ def measure(feedback=False):
         except:
             logging.warning('Live plotting glitch (No big deal)')
         if not feedback:
-		if maintask.userin == 'u':
-			maintask.z[0] += Z_STEP
-		elif maintask.userin == 'd':
-			maintask.z[0] -= Z_STEP
+	    if maintask.userin == 'u':
+		maintask.z[0] += Z_STEP
+	    elif maintask.userin == 'd':
+                maintask.z[0] -= Z_STEP
+	    getattr(daq, 'set_ao%i' % DCCHANS[2])(maintask.z[0])
 
 
     print('%i approaches completed' % maintask.callcounter)
@@ -111,7 +109,8 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             contactheight = np.mean(odata[CONTACT_START:CONTACT_STOP])
             eqheight = np.mean(odata[EQ_START:EQ_STOP])
             displace = contactheight - eqheight
-            self.z[0] -= LOOP_GAIN * displace # Check sign
+            self.z[0] += LOOP_GAIN * (displace - TARGET_DISPLACE)# Check sign
+            self.ztask.set_voltage(self.z)
         else: # if not in feedback mode
             pass
         #Check that Z is within limits
@@ -122,16 +121,10 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             self.z[0] = Z_MIN
             logging.warning('Reached minimum allowable value: %f' % Z_MIN)
             
-        #set z
-        self.ztask.set_voltage(self.z)
-        
         #record raw data:
-    #try:
         self.approach_data.add_data_point(
                 np.arange(SAMPLES), odata, self.z * 1e3 * np.ones(SAMPLES))
         self.approach_data.new_block()
-    #except:
-        #logging.warning('Failed to record approach curve')
             
         self.callcounter += 1
         print self.z[0]
