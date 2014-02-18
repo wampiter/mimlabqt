@@ -4,13 +4,17 @@ import qt
 import logging
 
 import approachimagingparamspark
-reload (approachimagingparamspark)
-from approachimagingparamspark import * #used like C constants, always in CAPS
+#reload (approachimagingparamspark)
+#from approachimagingparamspark import * #used like C constants, always in CAPS
 import taskclasses as tc
 reload(tc)
 import measurement_general as mg
 
 def measure(feedback=False):
+	#Make sure we have up to date constants (this is ugly).
+    reload (approachimagingparamspark)
+    from approachimagingparamspark import *
+
     #set up qt meaurement flow
     qt.flow.connect('measurement-end', tc.kill_all_tasks)
     qt.mstart()
@@ -20,7 +24,6 @@ def measure(feedback=False):
         daq.reset()
     else:
         daq = qt.instruments.create('daq', 'NI_DAQ', id = 'Dev1')
-
               
     #Prepare approach data structure to store absolutely all raw data:
     approach_data = qt.Data(name='approach_curves')
@@ -43,7 +46,10 @@ def measure(feedback=False):
     zactask = tc.AcOutTask(DEV, ACZCHAN, SAMPLES, SAMPLE_RATE, sync = True)    
     zacdata = GenSineWave(SAMPLES, AMPLITUDE, PHASE)
     zactask.set_signal(zacdata)
-    ztask = tc.DcOutTask(DEV, [DCCHANS[2]])
+    if feedback:
+        ztask = tc.DcOutTask(DEV, [DCCHANS[2]])
+    else:
+        ztask = False
     maintask = mimCallbackTask(DEV, TOPOCHAN, SAMPLES, SAMPLE_RATE, zstart, feedback,
                                 ztask, approach_data)
     
@@ -58,6 +64,12 @@ def measure(feedback=False):
             qt.msleep(.2)
         except:
             logging.warning('Live plotting glitch (No big deal)')
+        if not feedback:
+		if maintask.userin == 'u':
+			maintask.z[0] += Z_STEP
+		elif maintask.userin == 'd':
+			maintask.z[0] -= Z_STEP
+
 
     print('%i approaches completed' % maintask.callcounter)
     #stop tasks before error
@@ -66,7 +78,6 @@ def measure(feedback=False):
     getattr(daq,'set_ao%i' % ACZCHAN[0])(0)
     #close all 3 data objects    
     approach_data.close_file()    
-    
 
 class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
@@ -96,7 +107,11 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         #separate out channels in most recent trace
         odata = self.data
         if self.feedback:
-            pass
+           #For feedback, compare sample height around point of mass force to equilibrium value:
+            contactheight = np.mean(odata[CONTACT_START:CONTACT_STOP])
+            eqheight = np.mean(odata[EQ_START:EQ_STOP])
+            displace = contactheight - eqheight
+            self.z[0] -= LOOP_GAIN * displace # Check sign
         else: # if not in feedback mode
             pass
         #Check that Z is within limits
