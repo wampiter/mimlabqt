@@ -44,7 +44,7 @@ def measure(feedback=False, xvec=np.zeros(1), yvec=np.zeros(1),
     #Store current position of scanner
     start_position = np.zeros(3)    
     for i, chan in enumerate(DCCHANS):
-        start_position[i] = daq.get_parameters['ao%i' % chan]['value']
+        start_position[i] = getattr(daq,'get_ao%i' % chan)()
         if np.isnan(start_position[i]):
             daq.set('ao%i' % chan, 0.0)
             start_position[i] = 0.0 
