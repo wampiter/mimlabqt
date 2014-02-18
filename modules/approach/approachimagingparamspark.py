@@ -18,10 +18,18 @@ Z_MAX = 1.0 #Maximum Z voltage. VERY IMPORTANT TO NOT CRASH TIP
 Z_MIN = -0.5  #Minimum Z voltage. Prevent runaway in other (less bad) direction
 Z_LIFT = 0.01
 
-FAR_FIRST_SAMP = 60 #Defines window for far MIM point
-FAR_LAST_SAMP = 80
-CLOSE_FIRST_SAMP = 160 #Defines window for close MIM point
-CLOSE_LAST_SAMP = 180
+CONTACT_CENTER = 50
+CONTACT_SPAN = 10
+EQ_CENTER = 190
+EQ_SPAN = 10
+
+LOOP_GAIN = ?
+
+CONTACT_START = CONTACT_CENTER - CONTACT_SPAN/2
+CONTACT_STOP = CONTACT_CENTER + CONTACT_SPAN/2
+EQ_START = EQ_CENTER - EQ_SPAN/2
+EQ_STOP = EQ_CENTER + EQ_SPAN/2
+
 
 def GenSineWave(elements, amplitude , phase):
     wave = np.zeros(elements)
