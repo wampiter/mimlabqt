@@ -152,7 +152,8 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     feedback -- whether or not to use topography (z) feedback
     '''
     def __init__(self, dev, channels, samples, samplerate, feedback, ztask,
-                 approach_data, fastvec, slowvec, xytask, start_position, spatial_data):
+                 approach_data, fastvec, slowvec, xytask, start_position,
+                 spatial_data, repeat = False):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
         self.z = np.zeros(1)
         self.z[0] = start_position[2]
@@ -165,12 +166,13 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.slowvec = slowvec
         self.xytask = xytask
         self.spatial_data = spatial_data
+        self.repeat = repeat
 
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)      
         if self.callcounter % len(self.fastvec) == 0:
             slowcounter = self.callcounter/len(self.fastvec)
-            if slowcounter >= len(self.slowvec) and not repeat:
+            if slowcounter >= len(self.slowvec) and not self.repeat:
                 self.userin = 'q'
                 print 'Completed scan'
                 self.StopTask()
@@ -223,7 +225,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             else:
                 spatial_data_current = self.spatial_data[1] #left
             spatial_data_current.add_data_point(
-                self.fastvec[self.callcounter] * 1e3, self.y * 1e3, self.z * 1e3)#NEEDS FIX
+                xy[0] * 1e3, xy[1] * 1e3, self.z * 1e3)
         
         self.callcounter += 1
         print self.z[0]
