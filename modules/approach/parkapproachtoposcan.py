@@ -77,7 +77,7 @@ def measure(feedback=False, xvec=np.zeros(1), yvec=np.zeros(1),
             data_obj.add_coordinate('y [mV]')
             data_obj.add_value('z [mV]')
             data_obj.topoplot2d = qt.Plot2D(
-                    spatial_data, name = 'topography linecuts')
+                    data_obj, coordim = 0, name = 'topography linecuts %s' % data_obj)
             if scany:
                 data_obj.topoplot3d = qt.Plot3D(spatial_data, 
                                                 name = 'topography')
@@ -153,7 +153,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
     def __init__(self, dev, channels, samples, samplerate, feedback, ztask,
                  approach_data, fastvec, slowvec, xytask, start_position,
-                 spatial_data, repeat = False):
+                 spatial_data, repeat = True):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
         self.z = np.zeros(1)
         self.z[0] = start_position[2]
@@ -179,11 +179,12 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                 return
             else:
                 #For non-yscan casese the following line will remain yvec[0]
-                self.slow_pos = self.slowvec[slowcounter % len(self.slowvec)]
-                print('slow direction set to %f volts.' 
-                      % self.slowvec[slowcounter % len(self.slowvec)])
-                for data_obj in self.spatial_data:
-                    data_obj.new_block()
+                self.slowpos = self.slowvec[slowcounter % len(self.slowvec)]
+                print('slow direction set to') 
+                print(self.slowvec[slowcounter % len(self.slowvec)])
+                if self.spatial_data:
+                    for data_obj in self.spatial_data:
+                        data_obj.new_block()
                         
         #separate out channels in most recent trace
         odata = self.data
@@ -212,20 +213,20 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         fastpos = self.fastvec[fastindex]
         xy = fastpos + self.slowpos
         #Finally, do the deed:
-        xytask.set_voltage(xy)
+        self.xytask.set_voltage(xy)
         #record raw data:
         self.approach_data.add_data_point(
                 np.arange(SAMPLES), odata, self.z * 1e3 * np.ones(SAMPLES))
         self.approach_data.new_block()
 
         #If we're in the right-going segmet
-        if len(self.fastvec) > 1:
+        if len(self.fastvec) > 2:
             if fastindex < len(self.fastvec)/2:
                 spatial_data_current = self.spatial_data[0] #right
             else:
                 spatial_data_current = self.spatial_data[1] #left
             spatial_data_current.add_data_point(
-                xy[0] * 1e3, xy[1] * 1e3, self.z * 1e3)
+                xy[0] * 1e3, xy[1] * 1e3, self.z[0] * 1e3)
         
         self.callcounter += 1
         print self.z[0]
