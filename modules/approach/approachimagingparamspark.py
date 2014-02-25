@@ -2,7 +2,7 @@ import numpy as np
 
 #OUTPUT CHANNEL NUMBERS
 DEV = 2
-DCCHANS = [1,2,3] #list of DC channel numbers [x,y,z]
+DCZCHAN = [3] #list of DC channel numbers [x,y,z]
 ACZCHAN = [0] #list of AC Z channel
 MIMCHANS = [4,5] #Anaog input channels [C,R]
 TOPOCHAN = [0] #Analog input for laser feedback
