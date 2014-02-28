@@ -12,7 +12,9 @@ import measurement_general as mg
 import parkstructs
 import ctypes as c
 
-def measure(xer, feedback=False, xsize = 0, ysize = 0, angle = 0,
+from threading import Thread
+
+def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
 			xpoints = 128, ypoints = 128):
     '''
     Takes a topo measurement. Aborts with 'q' (or stop)
@@ -39,16 +41,16 @@ def measure(xer, feedback=False, xsize = 0, ysize = 0, angle = 0,
         daq = qt.instruments.get_instruments_by_type('NI_DAQ')[0]
     else:
         daq = qt.instruments.create('daq', 'NI_DAQ', id = 'Dev1')
-	if qt.instruments.get_instruments_by_type('xer'):
-		afm = qt.instruments.get_instruments_by_type('xer')[0]
-	else:
-		afm = qt.instruments.create('afm', 'xer')
+    if qt.instruments.get_instruments_by_type('xer'):
+        afm = qt.instruments.get_instruments_by_type('xer')[0]
+    else:
+        afm = qt.instruments.create('afm', 'xer')
 
     #Store current position of scanner
     zstart = np.zeros(1)    
     zstart[0] = getattr(daq,'get_ao%i' % DCZCHAN[0])()
     if np.isnan(zstart[0]):
-    	daq.set('ao%i' % DCZCHAN[0], 0.0)
+        daq.set('ao%i' % DCZCHAN[0], 0.0)
         zstart[0] = 0.0 
 
     #Prepare approach data structure to store absolutely all raw data:
@@ -66,18 +68,48 @@ def measure(xer, feedback=False, xsize = 0, ysize = 0, angle = 0,
         spatial_data_left = qt.Data(name = 'spatial_data_left')
         spatial_data = [spatial_data_right, spatial_data_left]
         for data_obj in spatial_data:
-            data_obj.add_coordinate('x [mV]')
-            data_obj.add_coordinate('y [mV]')
+            data_obj.add_value('x [mV]')
+            data_obj.add_value('y [mV]')
             data_obj.add_value('z [mV]')
-            data_obj.topoplot2d = qt.Plot2D(
-                    data_obj, coordim = 0, name = 'topography linecuts %s' % data_obj)
+            data_obj.topoplot2d = qt.Plot2D(data_obj, coordim = 0, 
+                                name = 'topography linecuts %s' % data_obj)
             if ysize > 0:
                 data_obj.topoplot3d = qt.Plot3D(spatial_data, 
                                                 name = 'topography')
             data_obj.create_file()
     else:
         spatial_data = False
-
+    
+    #Set up AFM:
+    if xsize > 0:
+        afm.set_fSizeX(xsize)
+        afm.set_fSizeY(ysize)    
+        afm.set_fRotation(angle)
+        afm.set_fRate(float(SAMPLERATE)/float(SAMPLES*xpoints))
+        
+        #take calibration scan:
+        xycalstart = []
+        ls = linescanthread(afm, [0])
+        ls.start()
+        while ls.is_alive():
+            xy = [getattr(daq, 'get_ai%i' % XYCHANS[0]), 
+                  getattr(daq, 'get_ai%i' % XYCHANS[1])]
+            xycalstart.append(xy)
+            
+        xycalend = []
+        ls = linescanthread(afm, [ypoints])
+        ls.start()
+        while ls.is_alive():
+            xy = [getattr(daq, 'get_ai%i' % XYCHANS[0]), 
+                  getattr(daq, 'get_ai%i' % XYCHANS[1])]
+            xycalend.append(xy)
+    
+    #Calibrate XY reading:
+    xmin = min(xycalend)
+    xmax = max(xycalstart)
+    ymin = min(xycalstart)
+    ymax = max(xycalend)
+    
     #Set up tasks:
     zactask = tc.AcOutTask(DEV, ACZCHAN, SAMPLES, SAMPLE_RATE, sync = True)    
     zacdata = GenSineWave(SAMPLES, AMPLITUDE, PHASE)
@@ -86,8 +118,8 @@ def measure(xer, feedback=False, xsize = 0, ysize = 0, angle = 0,
         ztask = tc.DcOutTask(DEV, [DCCHANS[2]])
     else:
         ztask = False
-    maintask = mimCallbackTask(afm, TOPOCHAN, SAMPLES, SAMPLE_RATE, feedback,
-                                ztask, approach_data, spatial_data, zstart)
+    maintask = mimCallbackTask(DEV, TOPOCHAN + XYCHANS, SAMPLES, SAMPLE_RATE,
+                    afm, feedback, ztask, approach_data, spatial_data, zstart)
     
     maintask.userin = False
     zactask.StartTask()
@@ -119,7 +151,25 @@ def measure(xer, feedback=False, xsize = 0, ysize = 0, angle = 0,
     if spatial_data:
         for data_obj in spatial_data:
             data_obj.close_file()
-        
+
+class linescanthread(Threading):
+    '''
+    Takes linescan as thread.
+    Use with linescanthread.start()
+    
+    Args:
+    afm: pass in afm instrument
+    lines: list of lines to scan
+    '''
+    def __init__(self, afm, lines):
+        Threading.__init__self()
+        self.afm = afm
+        self.lines = lines
+    def run(self):
+        for line in self.lines:
+            self.currentline = line
+            self.afm.LineScan(line)
+
 class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
     Creates (but does not start) task which runs continuously, executing 
@@ -132,24 +182,24 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     zstart -- z-voltage at which to begin
     feedback -- whether or not to use topography (z) feedback
     '''
-    def __init__(self, afm, channels, samples, samplerate, feedback, ztask,
-                 approach_data, patial_data, zstart):
+    def __init__(self, dev, channels, samples, samplerate, afm, feedback, 
+                 ztask, approach_data, spatial_data, zstart):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
-        self.z = np.zeros(1)
-        self.z[0] = start_position[2]
+        self.z = zstart
         self.feedback = feedback
         self.userin = False # stores whether task has been interrupted by user
         self.callcounter = 0 # iterates each approach curve (callback)
         self.ztask = ztask
         self.approach_data = approach_data
-        self.fastvec = fastvec
-        self.slowvec = slowvec
-        self.xytask = xytask
         self.spatial_data = spatial_data
         self.repeat = repeat
+        self.afm = afm
 
     def EveryNCallback(self):
-        tc.AnalogInCallbackTask.EveryNCallback(self)      
+        tc.AnalogInCallbackTask.EveryNCallback(self)
+        
+                
+        
         if self.callcounter % len(self.fastvec) == 0:
             slowcounter = self.callcounter/len(self.fastvec)
             if slowcounter >= len(self.slowvec) and not self.repeat:
