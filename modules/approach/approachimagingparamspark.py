@@ -1,7 +1,7 @@
 import numpy as np
 
 #OUTPUT CHANNEL NUMBERS
-DEV = 2
+DEV = 1
 DCZCHAN = [3] #list of DC channel numbers [x,y,z]
 ACZCHAN = [0] #list of AC Z channel
 
