@@ -98,10 +98,10 @@ class xer(Instrument):
     def Approach(self):
         self.raw.Approach()
 
-    def LineScan(self, line, wait):
+    def LineScan(self, line, wait = True):
         self.raw.LineScan(c.c_int(line), c.c_bool(wait))
 
-    def Image(self, wait):
+    def Image(self, wait = True):
         self.raw.Image(c.byref(self.ip), c.c_bool(wait))
 
     def Abort(self):
