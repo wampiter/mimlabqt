@@ -9,9 +9,6 @@ from approachimagingparamspark import * #used like C constants, always in CAPS
 import taskclasses as tc
 reload(tc)
 import measurement_general as mg
-import parkstructs
-import ctypes as c
-
 from threading import Thread
 
 def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
@@ -26,7 +23,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     Kwargs:
     feedback -- whether or not to use feedback
     xsize -- scan size in um
-	angle -- measurement ange (in radians)
+    angle -- measurement ange (in radians)
     '''
     #Check that ysize not specified without xsize:
     if xsize == 0 and not ysize == 0:
@@ -46,7 +43,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     else:
         afm = qt.instruments.create('afm', 'xer')
 
-    #Store current position of scanner
+    #Store current height of scanner
     zstart = np.zeros(1)    
     zstart[0] = getattr(daq,'get_ao%i' % DCZCHAN[0])()
     if np.isnan(zstart[0]):
@@ -58,6 +55,8 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     approach_data.add_coordinate('sample')
     approach_data.add_value('optical')
     approach_data.add_value('z [mV]')
+    approach_data.add_value('x [um]')
+    approach_data.add_value('y [um]')
     approach_plot = qt.Plot2D(approach_data, name = 'approach_trace')
     approach_data.create_file()
     approach_data.copy_file('parkapproachtoposcan.py')
@@ -92,23 +91,28 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         ls = linescanthread(afm, [0])
         ls.start()
         while ls.is_alive():
-            xy = [getattr(daq, 'get_ai%i' % XYCHANS[0]), 
-                  getattr(daq, 'get_ai%i' % XYCHANS[1])]
-            xycalstart.append(xy)
-            
+            xy = [getattr(daq, 'get_ai%i' % XYCHANS[0])(), 
+                  getattr(daq, 'get_ai%i' % XYCHANS[1])()]
+            xycalstart.append(xy)   
         xycalend = []
         ls = linescanthread(afm, [ypoints])
         ls.start()
         while ls.is_alive():
-            xy = [getattr(daq, 'get_ai%i' % XYCHANS[0]), 
-                  getattr(daq, 'get_ai%i' % XYCHANS[1])]
+            xy = [getattr(daq, 'get_ai%i' % XYCHANS[0])(), 
+                  getattr(daq, 'get_ai%i' % XYCHANS[1])()]
             xycalend.append(xy)
     
     #Calibrate XY reading:
-    xmin = min(xycalend)
-    xmax = max(xycalstart)
-    ymin = min(xycalstart)
-    ymax = max(xycalend)
+    xminv = min(xycalend)
+    xmaxv = max(xycalstart)
+    yminv = min(xycalstart)
+    ymaxv = max(xycalend)
+    
+    def voltagetoposition(vx,vy):
+        x = ((xsize*np.cos(angle)+ysize*np.sin(angle))*(v-xminv)/(xmaxv-xminv)
+            - ysize*np.sin(angle))
+        y = (xsize*np.sin(angle)+ysize*np.cos(angle))*(v-yminv)/(ymaxv-yminv)
+        return [x,y]
     
     #Set up tasks:
     zactask = tc.AcOutTask(DEV, ACZCHAN, SAMPLES, SAMPLE_RATE, sync = True)    
@@ -135,7 +139,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
             logging.warning('Live plotting glitch (No big deal)')
         if not feedback:
 	    	if maintask.userin == 'u':
-				maintask.z[0] += Z_STEP
+			maintask.z[0] += Z_STEP
 	    	elif maintask.userin == 'd':
         		maintask.z[0] -= Z_STEP
 	    	getattr(daq, 'set_ao%i' % DCZCHAN[0])(maintask.z[0])
@@ -152,7 +156,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         for data_obj in spatial_data:
             data_obj.close_file()
 
-class linescanthread(Threading):
+class linescanthread(Thread):
     '''
     Takes linescan as thread.
     Use with linescanthread.start()
@@ -162,7 +166,7 @@ class linescanthread(Threading):
     lines: list of lines to scan
     '''
     def __init__(self, afm, lines):
-        Threading.__init__self()
+        Thread.__init__(self)
         self.afm = afm
         self.lines = lines
     def run(self):
@@ -183,7 +187,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     feedback -- whether or not to use topography (z) feedback
     '''
     def __init__(self, dev, channels, samples, samplerate, afm, feedback, 
-                 ztask, approach_data, spatial_data, zstart):
+                 ztask, approach_data, spatial_data, zstart, xsize, ypoints):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
         self.z = zstart
         self.feedback = feedback
@@ -193,28 +197,28 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.approach_data = approach_data
         self.spatial_data = spatial_data
         self.repeat = repeat
-        self.afm = afm
+        self.xsize = xsize
+        self.ls = linescanthread(afm, np.arange(ypoints))
+        self.ls.start()
+        self.currentline = 0
+        self.state = 'start'
 
     def EveryNCallback(self):
-        tc.AnalogInCallbackTask.EveryNCallback(self)
-        
-                
-        
-        if self.callcounter % len(self.fastvec) == 0:
-            slowcounter = self.callcounter/len(self.fastvec)
-            if slowcounter >= len(self.slowvec) and not self.repeat:
+        tc.AnalogInCallbackTask.EveryNCallback(self)    
+        if xsize > 0:   
+            if not self.ls.is_alive():
                 self.userin = 'q'
                 print 'Completed scan'
                 self.StopTask()
                 return
             else:
-                #For non-yscan casese the following line will remain yvec[0]
-                self.slowpos = self.slowvec[slowcounter % len(self.slowvec)]
-                print('slow direction set to') 
-                print(self.slowvec[slowcounter % len(self.slowvec)])
-                if self.spatial_data:
+                if self.currentline != self.ls.currentline:
+                    self.currentline = self.ls.currentline
+                    print('on line %i' % self.currentline) 
                     for data_obj in self.spatial_data:
                         data_obj.new_block()
+                    self.state = 'start'
+                    
                         
         #separate out channels in most recent trace
         odata = self.data
@@ -229,8 +233,6 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             else:
                 self.z[0] += .01 * np.sign(delta)
             self.ztask.set_voltage(self.z)
-        else: # if not in feedback mode
-            pass
         #Check that Z is within limits
         if self.z[0] > Z_MAX:
             self.z[0] = Z_MAX
@@ -238,19 +240,20 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         elif self.z[0] < Z_MIN:
             self.z[0] = Z_MIN
             logging.warning('Reached minimum allowable value: %f' % Z_MIN)
-        #Calculate xy poitionfor ext point
-        fastindex = self.callcounter % len(self.fastvec)
-        fastpos = self.fastvec[fastindex]
-        xy = fastpos + self.slowpos
-        #Finally, do the deed:
-        self.xytask.set_voltage(xy)
         #record raw data:
+        if xsize > 0:
+            [xpos, ypos] = voltagetoposition(np.mean(self.split_data[XYCHANS[0]]),
+                                            np.mean(self.split_data[XYCHANS[1]]))
+        else:
+            xpos = ypos = 0
         self.approach_data.add_data_point(
-                np.arange(SAMPLES), odata, self.z * 1e3 * np.ones(SAMPLES))
+                np.arange(SAMPLES), odata, self.z * 1e3 * np.ones(SAMPLES),
+                            xpos, ypos)
         self.approach_data.new_block()
 
         #If we're in the right-going segmet
-        if len(self.fastvec) > 2:
+        if xsize > 0:
+            if state = 'start' and #NEED TO TEST THIS CONDITION!!!!
             if fastindex < len(self.fastvec)/2:
                 spatial_data_current = self.spatial_data[0] #right
             else:
