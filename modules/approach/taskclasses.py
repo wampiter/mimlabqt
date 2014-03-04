@@ -138,6 +138,7 @@ class AnalogInCallbackTask(BaseTask):
     '''
     def __init__(self, dev, channels, samples, samplerate):
         BaseTask.__init__(self)
+        self.channels = channels
         self.samples = samples
         self.samplerate = samplerate
         self.data_samples = samples * len(channels)
@@ -155,6 +156,8 @@ class AnalogInCallbackTask(BaseTask):
         read = int32()
         self.ReadAnalogF64(self.samples, 10.0, DAQmx_Val_GroupByChannel, 
                            self.data, self.data_samples, byref(read), None)
+        for i,chan in enumerate(self.channels):
+            self.split_data[chan] = self.data[i*samples:(i+1)*samples]
                            
     def DoneCallback(self, status):
         print "Status",status.value
