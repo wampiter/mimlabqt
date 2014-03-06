@@ -182,8 +182,9 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.spatial_data = spatial_data
         self.repeat = repeat
         self.xsize = xsize
-        self.ls = linescanthread(afm, np.arange(ypoints))
-        self.ls.start()
+        if xsize > 0:
+            self.ls = linescanthread(afm, np.arange(ypoints))
+            self.ls.start()
         self.currentline = 0
         self.state = 'start'
         self.xpoints = xpoints
