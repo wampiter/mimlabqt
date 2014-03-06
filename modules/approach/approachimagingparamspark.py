@@ -16,6 +16,7 @@ AMPLITUDE = .8
 PHASE = np.pi
 
 Z_STEP = 2.0e-2 # %f User controlled step in non-feedback (approach) mode
+Z_SCANNER_STEP = 2.0e-2
 
 Z_MAX = 2.0 #Maximum Z voltage. VERY IMPORTANT TO NOT CRASH TIP
 Z_MIN = -3.0  #Minimum Z voltage. Prevent runaway in other (less bad) direction

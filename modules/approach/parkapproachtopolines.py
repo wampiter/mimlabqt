@@ -80,9 +80,9 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         spatial_data = False
     
     #Set up AFM:
+    afm.set_fSizeX(xsize)
+    afm.set_fSizeY(ysize)
     if xsize > 0:
-        afm.set_fSizeX(xsize)
-        afm.set_fSizeY(ysize)    
         afm.set_fRotation(angle)
         afm.set_fRate(float(SAMPLERATE)/float(SAMPLES*xpoints))
         
@@ -102,17 +102,21 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
                   getattr(daq, 'get_ai%i' % XYCHANS[1])()]
             xycalend.append(xy)
     
-    #Calibrate XY reading:
-    xminv = min(xycalend)
-    xmaxv = max(xycalstart)
-    yminv = min(xycalstart)
-    ymaxv = max(xycalend)
+        #Calibrate XY reading:
+        xminv = min(xycalend)
+        xmaxv = max(xycalstart)
+        yminv = min(xycalstart)
+        ymaxv = max(xycalend)
     
     def voltagetoposition(vx,vy):
         x = ((xsize*np.cos(angle)+ysize*np.sin(angle))*(v-xminv)/(xmaxv-xminv)
             - ysize*np.sin(angle))
         y = (xsize*np.sin(angle)+ysize*np.cos(angle))*(v-yminv)/(ymaxv-yminv)
         return [x,y]
+
+    zscan = afm.get_zScanner()
+    if not zscan:
+        zscan = 0
     
     #Set up tasks:
     zactask = tc.AcOutTask(DEV, ACZCHAN, SAMPLES, SAMPLE_RATE, sync = True)    
@@ -139,11 +143,22 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         except:
             logging.warning('Live plotting glitch (No big deal)')
         if not feedback:
-	    	if maintask.userin == 'u':
-			maintask.z[0] += Z_STEP
-	    	elif maintask.userin == 'd':
-        		maintask.z[0] -= Z_STEP
-	    	getattr(daq, 'set_ao%i' % DCZCHAN[0])(maintask.z[0])
+	    if maintask.userin == 'w':
+		maintask.z[0] += Z_STEP
+		getattr(daq, 'set_ao%i' % DCZCHAN[0])(maintask.z[0])
+		print maintask.z[0]
+	    elif maintask.userin == 's':
+                maintask.z[0] -= Z_STEP
+        	getattr(daq, 'set_ao%i' % DCZCHAN[0])(maintask.z[0])
+        	print maintask.z[0]
+            elif maintask.userin == 'a':
+                zscan -= Z_SCANNER_STEP
+                afm.set_zScanner(zscan)
+                print zscan
+            elif maintask.userin == 'd':
+                zscan += Z_SCANNER_STEP
+                afm.set_zScanner(zscan)
+                print zscan
 
 
     print('%i approaches completed' % maintask.callcounter)
@@ -180,7 +195,6 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.ztask = ztask
         self.approach_data = approach_data
         self.spatial_data = spatial_data
-        self.repeat = repeat
         self.xsize = xsize
         if xsize > 0:
             self.ls = linescanthread(afm, np.arange(ypoints))
@@ -195,7 +209,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
 
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)    
-        if xsize > 0:   
+        if self.xsize > 0:   
             if not self.ls.is_alive():
                 self.userin = 'q'
                 print 'Completed scan'
@@ -212,7 +226,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                     
                         
         #separate out channels in most recent trace
-        odata = self.split_data[TOPOCHAN[0]]
+        odata = self.split_data[0]
         if self.feedback:
            #For feedback, compare sample height around point of mass force to equilibrium value:
             contactheight = np.mean(odata[CONTACT_START:CONTACT_STOP])
@@ -232,18 +246,18 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             self.z[0] = Z_MIN
             logging.warning('Reached minimum allowable value: %f' % Z_MIN)
         #record raw data:
-        if xsize > 0:
-            [xpos, ypos] = voltagetoposition(np.mean(self.split_data[XYCHANS[0]]),
-                                            np.mean(self.split_data[XYCHANS[1]]))
+        if self.xsize > 0:
+            [xpos, ypos] = voltagetoposition(np.mean(self.split_data[1]),
+                                            np.mean(self.split_data[2]))
         else:
             xpos = ypos = 0
         self.approach_data.add_data_point(
                 np.arange(SAMPLES), odata, self.z * 1e3 * np.ones(SAMPLES),
-                            xpos, ypos)
+                            xpos*np.ones(SAMPLES), ypos*np.ones(SAMPLES))
         self.approach_data.new_block()
 
         #state checks
-        if xsize > 0:
+        if self.xsize > 0:
             if not self.rotated and prev_xy:
                 frac_change = (xpos - prev_xy[0])/(self.xsize)
             elif prev_xy:
