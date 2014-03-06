@@ -45,8 +45,7 @@ xmax = max([i[0] for i in xycalstart])
 ymin = min([i[1] for i in xycalstart])
 ymax = max([i[1] for i in xycalend])
 
-p1.clear()
-p1 = plot()
+p1 = plot([i[0] for i in xycalstart])
 print xmin
 print xmax
 print ymin
