@@ -76,6 +76,10 @@ class xer(Instrument):
 	    flags=Instrument.FLAG_GETSET,
 	    units='degrees', type=types.FloatType)
 
+	self.add_parameter('zScanner',
+            flags=Instrument.FLAG_SET + Instrument.FLAG_SOFTGET,
+            units = 'um', type=types.FloatType)
+
 	self.scp.nWidth = c.c_int(256)
 	self.scp.nHeight = c.c_int(256)
         self.scp.fOverScan = c.c_float(2)
@@ -91,9 +95,6 @@ class xer(Instrument):
 
     def XYScannerMove(self, x, y):
         self.raw.XYScannerMove(c.c_double(x),c.c_double(y))
-
-    def ZScannerMove(self, z):
-        self.raw.ZScannerMove(c.c_double(z))
 
     def Approach(self):
         self.raw.Approach()
@@ -173,3 +174,8 @@ class xer(Instrument):
     def do_set_fRotation(self, d):
         self.ip.fRotation = c.c_float(d)
         self.raw.ImageConfig(c.byref(self.ip))
+
+    def do_set_zScanner(self, z):
+        return self.raw.ZScannerMove(c.c_double(z))
+
+

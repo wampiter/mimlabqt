@@ -142,6 +142,7 @@ class AnalogInCallbackTask(BaseTask):
         self.samples = samples
         self.samplerate = samplerate
         self.data_samples = samples * len(channels)
+        self.split_data = np.zeros((len(channels),samples))
         self.data = np.zeros(self.data_samples)
         for chan in channels:
             self.CreateAIVoltageChan("Dev%i/ai%i" % (dev,chan), "", DAQmx_Val_RSE, 
@@ -157,7 +158,7 @@ class AnalogInCallbackTask(BaseTask):
         self.ReadAnalogF64(self.samples, 10.0, DAQmx_Val_GroupByChannel, 
                            self.data, self.data_samples, byref(read), None)
         for i,chan in enumerate(self.channels):
-            self.split_data[chan] = self.data[i*samples:(i+1)*samples]
+            self.split_data[i] = self.data[i*self.samples:(i+1)*self.samples]
                            
     def DoneCallback(self, status):
         print "Status",status.value
