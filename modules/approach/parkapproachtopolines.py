@@ -123,7 +123,8 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     else:
         ztask = False
     maintask = mimCallbackTask(DEV, TOPOCHAN + XYCHANS, SAMPLES, SAMPLE_RATE,
-                    afm, feedback, ztask, approach_data, spatial_data, zstart)
+                    afm, feedback, ztask, approach_data, spatial_data, zstart,
+                    xsize, angle, xpoints, ypoints)
     
     maintask.userin = False
     zactask.StartTask()
@@ -156,24 +157,6 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         for data_obj in spatial_data:
             data_obj.close_file()
 
-class linescanthread(Thread):
-    '''
-    Takes linescan as thread.
-    Use with linescanthread.start()
-    
-    Args:
-    afm: pass in afm instrument
-    lines: list of lines to scan
-    '''
-    def __init__(self, afm, lines):
-        Thread.__init__(self)
-        self.afm = afm
-        self.lines = lines
-    def run(self):
-        for line in self.lines:
-            self.currentline = line
-            self.afm.LineScan(line)
-
 class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
     Creates (but does not start) task which runs continuously, executing 
@@ -187,7 +170,8 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     feedback -- whether or not to use topography (z) feedback
     '''
     def __init__(self, dev, channels, samples, samplerate, afm, feedback, 
-                 ztask, approach_data, spatial_data, zstart, xsize, ypoints):
+                 ztask, approach_data, spatial_data, zstart, xsize, angle,
+                 xpoints, ypoints):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
         self.z = zstart
         self.feedback = feedback
@@ -202,6 +186,11 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.ls.start()
         self.currentline = 0
         self.state = 'start'
+        self.xpoints = xpoints
+        if angle > 90:
+            self.rotated = True
+        else:
+            self.rotated = False
 
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)    
@@ -218,10 +207,11 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                     for data_obj in self.spatial_data:
                         data_obj.new_block()
                     self.state = 'start'
+                    prev_xy = False
                     
                         
         #separate out channels in most recent trace
-        odata = self.data
+        odata = self.split_data[TOPOCHAN[0]]
         if self.feedback:
            #For feedback, compare sample height around point of mass force to equilibrium value:
             contactheight = np.mean(odata[CONTACT_START:CONTACT_STOP])
@@ -251,15 +241,48 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                             xpos, ypos)
         self.approach_data.new_block()
 
-        #If we're in the right-going segmet
+        #state checks
         if xsize > 0:
-            if state = 'start' and #NEED TO TEST THIS CONDITION!!!!
-            if fastindex < len(self.fastvec)/2:
-                spatial_data_current = self.spatial_data[0] #right
+            if not self.rotated and prev_xy:
+                frac_change = (xpos - prev_xy[0])/(self.xsize)
+            elif prev_xy:
+                frac_change = (ypos - prev_xy[1])/(self.xsize)
+            if self.state == 'start' and self.prev_xy:
+                if frac_change > 0.5/xpoints:
+                    self.state = 'out'
+            elif self.state == 'out':
+                if frac_change < 0:
+                    self.state = 'back'
+            elif self.state == 'back':
+                if frac_change > -0.5/xpoints:
+                    self.state = 'done'
+                    
+            if self.state == 'out':
+                spatial_data_current = self.spatial_data[0]
+            elif self.state == 'back':
+                spatial_data_current = self.spatial_data[1]
             else:
-                spatial_data_current = self.spatial_data[1] #left
-            spatial_data_current.add_data_point(
-                xy[0] * 1e3, xy[1] * 1e3, self.z[0] * 1e3)
-        
+                spatial_data_current = False
+            if spatial_data_current:
+                spatial_data_current.add_data_point(
+                    xpos, ypos, self.z[0] * 1e3)
+            self.prev_xy = [xpos,ypos]
         self.callcounter += 1
-        print self.z[0]
+        
+class linescanthread(Thread):
+    '''
+    Takes linescan as thread.
+    Use with linescanthread.start()
+    
+    Args:
+    afm: pass in afm instrument
+    lines: list of lines to scan
+    '''
+    def __init__(self, afm, lines):
+        Thread.__init__(self)
+        self.afm = afm
+        self.lines = lines
+    def run(self):
+        for line in self.lines:
+            self.currentline = line
+            self.afm.LineScan(line)
