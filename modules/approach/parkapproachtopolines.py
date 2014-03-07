@@ -67,14 +67,14 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         spatial_data_left = qt.Data(name = 'spatial_data_left')
         spatial_data = [spatial_data_right, spatial_data_left]
         for data_obj in spatial_data:
-            data_obj.add_value('x [mV]')
-            data_obj.add_value('y [mV]')
+            data_obj.add_coordinate('x [uV]')
+            data_obj.add_coordinate('y [uV]')
             data_obj.add_value('z [mV]')
             data_obj.topoplot2d = qt.Plot2D(data_obj, coordim = 0, 
                                 name = 'topography linecuts %s' % data_obj)
-            if ysize > 0:
-                data_obj.topoplot3d = qt.Plot3D(spatial_data, 
-                                                name = 'topography')
+##            if ysize > 0:
+##                data_obj.topoplot3d = qt.Plot3D(spatial_data, 
+##                                                name = 'topography')
             data_obj.create_file()
     else:
         spatial_data = False
@@ -84,18 +84,18 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     afm.set_fSizeY(ysize)
     if xsize > 0:
         afm.set_fRotation(angle)
-        afm.set_fRate(float(SAMPLERATE)/float(SAMPLES*xpoints))
+        afm.set_fRate(float(SAMPLE_RATE)/float(SAMPLES*xpoints))
         
         #take calibration scan:
         xycalstart = []
-        ls = linescanthread(afm, [0])
+        ls = linescanthread(afm, 0)
         ls.start()
         while ls.is_alive():
             xy = [getattr(daq, 'get_ai%i' % XYCHANS[0])(), 
                   getattr(daq, 'get_ai%i' % XYCHANS[1])()]
             xycalstart.append(xy)   
         xycalend = []
-        ls = linescanthread(afm, [ypoints])
+        ls = linescanthread(afm, ypoints)
         ls.start()
         while ls.is_alive():
             xy = [getattr(daq, 'get_ai%i' % XYCHANS[0])(), 
@@ -103,15 +103,19 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
             xycalend.append(xy)
     
         #Calibrate XY reading:
-        xminv = min(xycalend)
-        xmaxv = max(xycalstart)
-        yminv = min(xycalstart)
-        ymaxv = max(xycalend)
+        xminv = min([i[0] for i in xycalend])
+        xmaxv = max([i[0] for i in xycalstart])
+        yminv = min([i[1] for i in xycalstart])
+        ymaxv = max([i[1] for i in xycalend])
+        print xminv
+        print('xmin = %f' % xminv)
+        print('xmaxv = %f' % xmaxv)
+    afm.ZServo(False)
     
     def voltagetoposition(vx,vy):
-        x = ((xsize*np.cos(angle)+ysize*np.sin(angle))*(v-xminv)/(xmaxv-xminv)
+        x = ((xsize*np.cos(angle)+ysize*np.sin(angle))*(vx-xminv)/(xmaxv-xminv)
             - ysize*np.sin(angle))
-        y = (xsize*np.sin(angle)+ysize*np.cos(angle))*(v-yminv)/(ymaxv-yminv)
+        y = (xsize*np.sin(angle)+ysize*np.cos(angle))*(vy-yminv)/(ymaxv-yminv)
         return [x,y]
 
     zscan = afm.get_zScanner()
@@ -123,12 +127,12 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     zacdata = GenSineWave(SAMPLES, AMPLITUDE, PHASE)
     zactask.set_signal(zacdata)
     if feedback:
-        ztask = tc.DcOutTask(DEV, [DCCHANS[2]])
+        ztask = tc.DcOutTask(DEV, [DCZCHAN[0]])
     else:
         ztask = False
     maintask = mimCallbackTask(DEV, TOPOCHAN + XYCHANS, SAMPLES, SAMPLE_RATE,
                     afm, feedback, ztask, approach_data, spatial_data, zstart,
-                    xsize, angle, xpoints, ypoints)
+                    xsize, angle, xpoints, ypoints, voltagetoposition)
     
     maintask.userin = False
     zactask.StartTask()
@@ -146,20 +150,19 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
 	    if maintask.userin == 'w':
 		maintask.z[0] += Z_STEP
 		getattr(daq, 'set_ao%i' % DCZCHAN[0])(maintask.z[0])
-		print maintask.z[0]
+		print('zDC = %f' % maintask.z[0])
 	    elif maintask.userin == 's':
                 maintask.z[0] -= Z_STEP
         	getattr(daq, 'set_ao%i' % DCZCHAN[0])(maintask.z[0])
-        	print maintask.z[0]
+        	print('zDC = %f' % maintask.z[0])
             elif maintask.userin == 'a':
                 zscan -= Z_SCANNER_STEP
                 afm.set_zScanner(zscan)
-                print zscan
+                print('zScan = %f' % zscan)
             elif maintask.userin == 'd':
                 zscan += Z_SCANNER_STEP
                 afm.set_zScanner(zscan)
-                print zscan
-
+                print('zScan = %f' % zscan)
 
     print('%i approaches completed' % maintask.callcounter)
     #stop tasks before error
@@ -171,6 +174,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     if spatial_data:
         for data_obj in spatial_data:
             data_obj.close_file()
+    afm.Abort()
 
 class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
@@ -186,7 +190,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
     def __init__(self, dev, channels, samples, samplerate, afm, feedback, 
                  ztask, approach_data, spatial_data, zstart, xsize, angle,
-                 xpoints, ypoints):
+                 xpoints, ypoints, voltagetoposition):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
         self.z = zstart
         self.feedback = feedback
@@ -201,11 +205,13 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             self.ls.start()
         self.currentline = 0
         self.state = 'start'
+        self.prev_xy=False
         self.xpoints = xpoints
         if angle > 90:
             self.rotated = True
         else:
             self.rotated = False
+        self.voltagetoposition = voltagetoposition
 
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)    
@@ -222,7 +228,8 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                     for data_obj in self.spatial_data:
                         data_obj.new_block()
                     self.state = 'start'
-                    prev_xy = False
+                    print self.state
+                    self.prev_xy = False
                     
                         
         #separate out channels in most recent trace
@@ -247,7 +254,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             logging.warning('Reached minimum allowable value: %f' % Z_MIN)
         #record raw data:
         if self.xsize > 0:
-            [xpos, ypos] = voltagetoposition(np.mean(self.split_data[1]),
+            [xpos, ypos] = self.voltagetoposition(np.mean(self.split_data[1]),
                                             np.mean(self.split_data[2]))
         else:
             xpos = ypos = 0
@@ -258,19 +265,22 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
 
         #state checks
         if self.xsize > 0:
-            if not self.rotated and prev_xy:
-                frac_change = (xpos - prev_xy[0])/(self.xsize)
-            elif prev_xy:
-                frac_change = (ypos - prev_xy[1])/(self.xsize)
+            if not self.rotated and self.prev_xy:
+                frac_change = (xpos - self.prev_xy[0])/(self.xsize)
+            elif self.prev_xy:
+                frac_change = (ypos - self.prev_xy[1])/(self.xsize)
             if self.state == 'start' and self.prev_xy:
-                if frac_change > 0.5/xpoints:
+                if frac_change > 0.5/self.xpoints:
                     self.state = 'out'
+                    print self.state
             elif self.state == 'out':
                 if frac_change < 0:
                     self.state = 'back'
+                    print self.state
             elif self.state == 'back':
-                if frac_change > -0.5/xpoints:
+                if frac_change > -0.5/self.xpoints:
                     self.state = 'done'
+                    print self.state
                     
             if self.state == 'out':
                 spatial_data_current = self.spatial_data[0]
@@ -293,11 +303,9 @@ class linescanthread(Thread):
     afm: pass in afm instrument
     lines: list of lines to scan
     '''
-    def __init__(self, afm, lines):
+    def __init__(self, afm, line):
         Thread.__init__(self)
         self.afm = afm
-        self.lines = lines
+        self.line = line
     def run(self):
-        for line in self.lines:
-            self.currentline = line
-            self.afm.LineScan(line)
+        self.afm.LineScan(line)

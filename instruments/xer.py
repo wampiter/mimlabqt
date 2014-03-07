@@ -94,19 +94,35 @@ class xer(Instrument):
 # --------------------------------------
 
     def XYScannerMove(self, x, y):
-        self.raw.XYScannerMove(c.c_double(x),c.c_double(y))
-
-    def Approach(self):
-        self.raw.Approach()
+        return self.raw.XYScannerMove(c.c_double(x),c.c_double(y))
 
     def LineScan(self, line, wait = True):
-        self.raw.LineScan(c.c_int(line), c.c_bool(wait))
+        return self.raw.LineScan(c.c_int(line), c.c_bool(wait))
 
     def Image(self, wait = True):
-        self.raw.Image(c.byref(self.ip), c.c_bool(wait))
+        return self.raw.Image(c.byref(self.ip), c.c_bool(wait))
 
     def Abort(self):
-        self.raw.Abort()
+        return self.raw.Abort()
+
+    def Connect(self):
+        return self.raw.Connect()
+
+    def Disconnect(self):
+        return self.raw.Disconnect()
+
+    def ZServo(self, state):
+        return self.raw.ZServo(c.c_int(state))
+    
+    def Approach(self):
+        self.ZServo(True)
+        return self.raw.Approach()
+
+    def Abort(self):
+        return self.raw.Abort()
+    
+    def rawrun(self, string):
+        return getattr(self.raw, string)
 
 
 # --------------------------------------
