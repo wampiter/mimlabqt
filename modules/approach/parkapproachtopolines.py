@@ -84,7 +84,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     afm.set_fSizeY(ysize)
     if xsize > 0:
         afm.set_fRotation(angle)
-        afm.set_fRate(float(SAMPLE_RATE)/float(SAMPLES*xpoints))
+        afm.set_fRate(float(SAMPLE_RATE)/float(SAMPLES*64))
         
         #take calibration scan:
         xycalstart = []
@@ -110,6 +110,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         print xminv
         print('xmin = %f' % xminv)
         print('xmaxv = %f' % xmaxv)
+        afm.set_fRate(float(SAMPLE_RATE)/float(SAMPLES*xpoints))
     afm.ZServo(False)
     
     def voltagetoposition(vx,vy):
@@ -200,9 +201,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.approach_data = approach_data
         self.spatial_data = spatial_data
         self.xsize = xsize
-        if xsize > 0:
-            self.ls = linescanthread(afm, np.arange(ypoints))
-            self.ls.start()
+        self.ypoints = ypoints
         self.currentline = 0
         self.state = 'start'
         self.prev_xy=False
@@ -212,18 +211,24 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         else:
             self.rotated = False
         self.voltagetoposition = voltagetoposition
+        self.afm = afm
+        if xsize > 0:
+            self.ls = linescanthread(self.afm, self.currentline)
+            self.ls.start()
 
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)    
         if self.xsize > 0:   
             if not self.ls.is_alive():
-                self.userin = 'q'
-                print 'Completed scan'
-                self.StopTask()
-                return
-            else:
-                if self.currentline != self.ls.currentline:
-                    self.currentline = self.ls.currentline
+                if self.currentline == self.ypoints:
+                    self.userin = 'q'
+                    print 'Completed scan'
+                    self.StopTask()
+                    return
+                else:
+                    self.currentline += 1
+                    self.ls = linescanthread(self.afm, self.currentline)
+                    self.ls.start()
                     print('on line %i' % self.currentline) 
                     for data_obj in self.spatial_data:
                         data_obj.new_block()
@@ -308,4 +313,4 @@ class linescanthread(Thread):
         self.afm = afm
         self.line = line
     def run(self):
-        self.afm.LineScan(line)
+        self.afm.LineScan(self.line)
