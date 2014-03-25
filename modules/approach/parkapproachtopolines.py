@@ -12,7 +12,7 @@ import measurement_general as mg
 from threading import Thread
 
 def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
-			xpoints = 128, ypoints = 128):
+			xpoints = 256, ypoints = 128, xslope = 0):
     '''
     Takes a topo measurement. Aborts with 'q' (or stop)
     in non-feedback, 'u' and 'd' will move stage up and down (backwards)
@@ -84,7 +84,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     afm.set_fSizeY(ysize)
     if xsize > 0:
         afm.set_fRotation(angle)
-        afm.set_fRate(float(SAMPLE_RATE)/float(SAMPLES*64))
+        afm.set_fRate(float(SAMPLE_RATE)/float(SAMPLES*32))
         
         #take calibration scan:
         xycalstart = []
@@ -133,7 +133,7 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         ztask = False
     maintask = mimCallbackTask(DEV, TOPOCHAN + XYCHANS, SAMPLES, SAMPLE_RATE,
                     afm, feedback, ztask, approach_data, spatial_data, zstart,
-                    xsize, angle, xpoints, ypoints, voltagetoposition)
+                    xsize, angle, xpoints, ypoints, voltagetoposition, xslope)
     
     maintask.userin = False
     zactask.StartTask()
@@ -191,7 +191,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     '''
     def __init__(self, dev, channels, samples, samplerate, afm, feedback, 
                  ztask, approach_data, spatial_data, zstart, xsize, angle,
-                 xpoints, ypoints, voltagetoposition):
+                 xpoints, ypoints, voltagetoposition, xslope):
         tc.AnalogInCallbackTask.__init__(self, dev, channels, samples, samplerate)
         self.z = zstart
         self.feedback = feedback
@@ -203,6 +203,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         self.xsize = xsize
         self.ypoints = ypoints
         self.currentline = 0
+        self.calls_at_change = 0
         self.state = 'start'
         self.prev_xy=False
         self.xpoints = xpoints
@@ -212,9 +213,11 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             self.rotated = False
         self.voltagetoposition = voltagetoposition
         self.afm = afm
+        self.xslope = xslope
         if xsize > 0:
             self.ls = linescanthread(self.afm, self.currentline)
             self.ls.start()
+        self.prev_nc = False
 
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)    
@@ -245,10 +248,19 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             eqheight = np.mean(odata[EQ_START:EQ_STOP])
             displace = contactheight - eqheight
             delta = LOOP_GAIN * (displace - TARGET_DISPLACE)# Check sign
-            if abs(delta) <.01:
+            if abs(displace + .03) < .02:
+                if not self.prev_nc:
+                    self.prev_nc = True
+                else:
+                    self.z[0] -= .02
+                    print 'nc'
+            elif abs(displace - TARGET_DISPLACE) <.7:
                 self.z[0] += delta
+                self.prev_nc = False
             else:
-                self.z[0] += .01 * np.sign(delta)
+                self.z[0] += (.7 * LOOP_GAIN) * np.sign(delta)
+                self.prev_nc = False
+                print 'ol'
             self.ztask.set_voltage(self.z)
         #Check that Z is within limits
         if self.z[0] > Z_MAX:
@@ -277,13 +289,15 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
             if self.state == 'start' and self.prev_xy:
                 if frac_change > 0.5/self.xpoints:
                     self.state = 'out'
+                    self.calls_at_change = self.callcounter
                     print self.state
             elif self.state == 'out':
-                if frac_change < 0:
+                if frac_change < 0 and self.callcounter - self.calls_at_change > self.xpoints/2:
                     self.state = 'back'
+                    self.calls_at_change = self.callcounter
                     print self.state
             elif self.state == 'back':
-                if frac_change > -0.5/self.xpoints:
+                if frac_change > -0.5/self.xpoints and self.callcounter - self.calls_at_change > self.xpoints/2:
                     self.state = 'done'
                     print self.state
                     
@@ -295,7 +309,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                 spatial_data_current = False
             if spatial_data_current:
                 spatial_data_current.add_data_point(
-                    xpos, ypos, self.z[0] * 1e3)
+                    xpos, ypos, self.z[0] * 1e3 + xpos*self.xslope)
             self.prev_xy = [xpos,ypos]
         self.callcounter += 1
         
