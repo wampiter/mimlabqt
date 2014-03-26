@@ -33,7 +33,7 @@ class xer(Instrument):
         Instrument.__init__(self, name, tags=['physical'])
 
 	#Create all important object:
-	self.raw = c.cdll.LoadLibrary("d:\\Dropbox\\Users\\Scott\\XER\\bin\\XERemote.dll")
+	self.raw = c.cdll.LoadLibrary("d:\\Sync\\Users\\Scott\\XER\\bin\\XERemote.dll")
 	self.raw.AddWndListener()
 	self.raw.Connect()
 	self.scp = ScanConfigParam()
