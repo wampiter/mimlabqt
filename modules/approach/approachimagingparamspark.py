@@ -11,7 +11,7 @@ TOPOCHAN = [0] #Analog input for laser feedback
 XYCHANS = [1,2]
 
 SAMPLES = 200 #Samples per approach curve
-SAMPLE_RATE = 2.0e3
+SAMPLE_RATE = 5.0e3
 AMPLITUDE = .8
 PHASE = np.pi
 
