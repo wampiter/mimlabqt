@@ -1,5 +1,11 @@
 import numpy as np
 
+def centerspan_to_startstop(cs):
+    [center, span] = cs
+    start = center - span/2
+    stop = center + span/2
+    return [start,stop]
+
 #OUTPUT CHANNEL NUMBERS
 DEV = 1
 DCZCHAN = [3] #list of DC channel numbers [x,y,z]
@@ -11,8 +17,8 @@ TOPOCHAN = [0] #Analog input for laser feedback
 XYCHANS = [1,2]
 
 SAMPLES = 200 #Samples per approach curve
-SAMPLE_RATE = 5.0e3
-AMPLITUDE = .8
+SAMPLE_RATE = 8.0e3
+AMPLITUDE = 1.2
 PHASE = np.pi
 
 Z_STEP = 2.0e-2 # %f User controlled step in non-feedback (approach) mode
@@ -22,18 +28,18 @@ Z_MAX = 2.0 #Maximum Z voltage. VERY IMPORTANT TO NOT CRASH TIP
 Z_MIN = -3.0  #Minimum Z voltage. Prevent runaway in other (less bad) direction
 Z_LIFT = 0.01
 
-CONTACT_CENTER = 55
-CONTACT_SPAN = 10
-EQ_CENTER = 10
-EQ_SPAN = 10
+contact = [CONTACT_CENTER, CONTACT_SPAN] = [51,8]
+eq = [EQ_CENTER, EQ_SPAN] = [160,10]
+mim_contact = [MIM_CONTACT_CENTER, MIM_CONTACT_SPAN] = [51, 10]
+mim_eq = [MIM_EQ_CENTER, MIM_EQ_SPAN] = [8, 8]
 
 LOOP_GAIN = 0.1
-TARGET_DISPLACE = 0.2
+TARGET_DISPLACE = .4
 
-CONTACT_START = CONTACT_CENTER - CONTACT_SPAN/2
-CONTACT_STOP = CONTACT_CENTER + CONTACT_SPAN/2
-EQ_START = EQ_CENTER - EQ_SPAN/2
-EQ_STOP = EQ_CENTER + EQ_SPAN/2
+[CONTACT_START, CONTACT_STOP] = centerspan_to_startstop(contact)
+[EQ_START, EQ_STOP] = centerspan_to_startstop(eq)
+[MIM_CONTACT_START, MIM_CONTACT_STOP] = centerspan_to_startstop(mim_contact)
+[MIM_EQ_START, MIM_EQ_STOP] = centerspan_to_startstop(mim_eq)
 
 
 def GenSineWave(elements, amplitude , phase):

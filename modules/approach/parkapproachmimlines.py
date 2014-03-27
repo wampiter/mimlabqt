@@ -62,6 +62,8 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
     approach_plot = qt.Plot2D(approach_data, name = 'approach_trace')
     approach_data.mimcplot = qt.Plot2D(approach_data, name='MIM-C [V]', 
                                        coorddim = 0, valdim = 5)
+    approach_data.mimcplot = qt.Plot2D(approach_data, name='MIM-R [V]', 
+                                       coorddim = 0, valdim = 6)
     approach_data.create_file()
     approach_data.copy_file('parkapproachtoposcan.py')
     approach_data.copy_file('approachimagingparamspark.py')
@@ -70,21 +72,26 @@ def measure(feedback=False, xsize = 0, ysize = 0, angle = 0,
         spatial_data_right = qt.Data(name = 'spatial_data_right')
         spatial_data_left = qt.Data(name = 'spatial_data_left')
         spatial_data = [spatial_data_right, spatial_data_left]
-        for data_obj in spatial_data:
+        for n,data_obj in enumerate(spatial_data):
             data_obj.add_coordinate('x [um]')
             data_obj.add_coordinate('y [um]')
             data_obj.add_value('z [mV]')
             data_obj.add_value('MIM-C [V]')
             data_obj.add_value('MIM-R [V]')
-            data_obj.topoplot2d = qt.Plot2D(data_obj, coordim = 0, 
-                                name = 'topography linecuts %s' % data_obj)
-            data_obj.mimcplot2d = qt.Plot2D(data_obj, coordim = 0, valdim = 3,
-                                name = 'mimc linecuts %s' % data_obj)
-            if ysize > 0:
-                data_obj.topoplot3d = qt.Plot3D(data_obj, 
+            if n == 1:
+                data_obj.topoplot2d = qt.Plot2D(data_obj, coordim = 0, 
+                                    name = 'topography linecuts %s' % data_obj)
+                data_obj.mimcplot2d = qt.Plot2D(data_obj, coordim = 0, valdim = 3,
+                                    name = 'mimc linecuts %s' % data_obj)
+                data_obj.mimrplot2d = qt.Plot2D(data_obj, coordim = 0, valdim = 4,
+                                    name = 'mimr linecuts %s' % data_obj)
+                if ysize > 0:
+                    data_obj.topoplot3d = qt.Plot3D(data_obj, 
                                                 name = 'topography %s' % data_obj)
-                data_obj.mimcplot3d = qt.Plot3D(data_obj, valdim = 3,
+                    data_obj.mimcplot3d = qt.Plot3D(data_obj, valdim = 3,
                                                 name = 'mimc %s' % data_obj)
+                    data_obj.mimrplot3d = qt.Plot3D(data_obj, valdim = 4,
+                                                name = 'mimr %s' % data_obj)
             data_obj.create_file()
     else:
         spatial_data = False
@@ -321,9 +328,9 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                 spatial_data_current = self.spatial_data[1]
             else:
                 spatial_data_current = False
-            if spatial_data_current:
-                mimc = np.mean(mimc[50:70]) - np.mean(mimc[0:20])
-                mimr = np.mean(mimr[50:70]) - np.mean(mimr[0:20])
+            if spatial_data_current and self.current_line > 0:
+                mimc = np.mean(mimc[MIM_CONTACT_START:MIM_CONTACT_STOP]) - np.mean(mimc[MIM_EQ_START:MIM_EQ_STOP])
+                mimr = np.mean(mimr[MIM_CONTACT_START:MIM_CONTACT_STOP]) - np.mean(mimr[MIM_EQ_START:MIM_EQ_STOP])
                 spatial_data_current.add_data_point(
                     xpos, ypos, self.z[0] * 1e3 + xpos*self.xslope, mimc, mimr)
             self.prev_xy = [xpos,ypos]
